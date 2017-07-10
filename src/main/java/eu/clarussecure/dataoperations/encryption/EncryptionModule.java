@@ -12,6 +12,7 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import org.w3c.dom.Document;
@@ -28,7 +29,7 @@ public class EncryptionModule implements DataOperation {
     protected Map<String, String> attributeTypes = new HashMap<>(); // name->type
     protected Map<String, String> typesProtection = new HashMap<>(); // type->protectionModule
     protected Map<String, String> typesDataIDs = new HashMap<>(); // type->idKey
-    protected KeyStore keyStore = new KeyStore();
+    protected KeyStore keyStore = KeyStore.getInstance();
 
     public EncryptionModule(Document policy) {
         // First, get the types of each attribute and build the map
@@ -58,7 +59,7 @@ public class EncryptionModule implements DataOperation {
             // Get the idKey only if the protection module is "encryption" or "simple"
             if (typeProtection.equals("encryption") || typeProtection.equals("simple")) {
                 String dataID = attributes.getNamedItem("id_key").getNodeValue();
-                this.typesDataIDs.put(typeProtection, dataID);
+                this.typesDataIDs.put(attributeType, dataID);
             }
         }
     }
@@ -151,7 +152,7 @@ public class EncryptionModule implements DataOperation {
                 // First, decipher the attribute Names and map them to the origial ones
                 for (int i = 0; i < com.getProtectedAttributeNames().length; i++) {
                     // Initialize the Secret Key and the Init Vector of the Cipher
-                    IvParameterSpec iv = new IvParameterSpec(attributesInitVector.getBytes("UTF-8"));
+                    IvParameterSpec iv = new IvParameterSpec(this.attributesInitVector.getBytes("UTF-8"));
                     SecretKeySpec skeySpec = new SecretKeySpec(this.attributeNamesKey.getBytes("UTF-8"), "AES");
 
                     // Initialize the required instances of Ciphers
@@ -185,18 +186,16 @@ public class EncryptionModule implements DataOperation {
 
                         // Encrypt only if the protection type is "encryption" or "simple"
                         if (protection.equals("encryption") || protection.equals("simple")) {
-                            // Get the encryption parameters of the attribute
+                            // Get the dataID
                             String dataID = this.typesDataIDs.get(this.attributeTypes.get(plainAttributeNames[j]));
-                            String key = this.keyStore.retrieveKey(dataID);
-                            String initVector = this.keyStore.retrieveInitVector(dataID);
 
-                            // Initialize the Secret Key and the Init Vector of the Cipher
-                            IvParameterSpec iv = new IvParameterSpec(initVector.getBytes("UTF-8"));
-                            SecretKeySpec skeySpec = new SecretKeySpec(key.getBytes("UTF-8"), "AES");
+                            // Get the Key, Initialization Vector and initialize the Cipher
+                            SecretKey key = this.keyStore.retrieveKey(dataID);
+                            IvParameterSpec iv = new IvParameterSpec(this.keyStore.retrieveInitVector(dataID));
 
                             // Initialize the required instances of Ciphers
                             Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-                            cipher.init(Cipher.DECRYPT_MODE, skeySpec, iv);
+                            cipher.init(Cipher.DECRYPT_MODE, key, iv);
 
                             // Decipher the value
                             // NOTE - To correctly decrypt, first Base64 decode, THEN decipher
@@ -251,7 +250,7 @@ public class EncryptionModule implements DataOperation {
             byteAttributeNamesEnc = new byte[attributeNames.length][];
             for (int i = 0; i < attributeNames.length; i++) {
                 // Initialize the Secret Key and the Init Vector of the Cipher
-                IvParameterSpec iv = new IvParameterSpec(attributesInitVector.getBytes("UTF-8"));
+                IvParameterSpec iv = new IvParameterSpec(this.attributesInitVector.getBytes("UTF-8"));
                 SecretKeySpec skeySpec = new SecretKeySpec(this.attributeNamesKey.getBytes("UTF-8"), "AES");
 
                 // Initialize the required instances of Ciphers
@@ -272,16 +271,15 @@ public class EncryptionModule implements DataOperation {
                     String protection = typesProtection.get(this.attributeTypes.get(attributeNames[j]));
                     // Encrypt only if the protection type is "encryption" or "simple"
                     if (protection.equals("encryption") || protection.equals("simple")) {
-                        // Get the key
+                        // Get the dataID
                         String dataID = this.typesDataIDs.get(this.attributeTypes.get(attributeNames[j]));
-                        String key = this.keyStore.retrieveKey(dataID);
-                        String initVector = this.keyStore.retrieveInitVector(dataID);
-                        // Initialize the Cipher
-                        IvParameterSpec iv = new IvParameterSpec(initVector.getBytes("UTF-8"));
-                        SecretKeySpec skeySpec = new SecretKeySpec(key.getBytes("UTF-8"), "AES");
+
+                        // Get the Key, Initialization Vector and initialize the Cipher
+                        SecretKey key = this.keyStore.retrieveKey(dataID);
+                        IvParameterSpec iv = new IvParameterSpec(this.keyStore.retrieveInitVector(dataID));
 
                         Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-                        cipher.init(Cipher.ENCRYPT_MODE, skeySpec, iv);
+                        cipher.init(Cipher.ENCRYPT_MODE, key, iv);
 
                         // NOTE - To correctly encrypt, First cipher, THEN Base64 encode
                         bytesContentEnc[i][j] = cipher.doFinal(contents[i][j].getBytes());
