@@ -1,9 +1,9 @@
 package eu.clarussecure.dataoperations.encryption.testing;
 
+import eu.clarussecure.dataoperations.AttributeNamesUtilities;
 import eu.clarussecure.dataoperations.Criteria;
 import eu.clarussecure.dataoperations.DataOperation;
 import eu.clarussecure.dataoperations.DataOperationCommand;
-import eu.clarussecure.dataoperations.DataOperationResponse;
 import eu.clarussecure.dataoperations.DataOperationResult;
 import eu.clarussecure.dataoperations.encryption.EncryptionModule;
 import eu.clarussecure.dataoperations.encryption.EncryptionResult;
@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.List;
@@ -28,6 +29,8 @@ public class Demo {
     public static void main(String[] args) throws IOException, SAXException, ParserConfigurationException {
         // Read the data from the file
         String[] attributes = readColumnNames(DATA_FILENAME);
+        String[] qualifiedAttribs = AttributeNamesUtilities.fullyQualified(Arrays.asList(attributes))
+                .toArray(new String[attributes.length]);
         String[][] data = readData(DATA_FILENAME);
 
         // Initialize the "cloud" to execute the commands
@@ -50,7 +53,7 @@ public class Demo {
         //DataOperation encryption = new EncryptionModule(null);
 
         // First "POST" to the cloud
-        List<DataOperationCommand> commandsPost = encryption.post(attributes, data);
+        List<DataOperationCommand> commandsPost = encryption.post(qualifiedAttribs, data);
         // Create a cloud object with the protected Attribute Names
         cloud = new Cloud(commandsPost.get(0).getProtectedAttributeNames());
 
@@ -83,7 +86,7 @@ public class Demo {
 
         // Retrieve the data from the cloud
         // CASE 1: no criteria = all the data
-        List<DataOperationCommand> commandsGet = encryption.get(attributes, null);
+        List<DataOperationCommand> commandsGet = encryption.get(qualifiedAttribs, null);
 
         // Query the cloud
         List<String[][]> results = new ArrayList<>();
@@ -107,7 +110,9 @@ public class Demo {
 
         // CASE 2: select some columns
         String[] someColumns = { "meuseDB/meuse/gid", "meuseDB/meuse/copper", "meuseDB/meuse/lead" };
-        commandsGet = encryption.get(someColumns, null);
+        String[] qualifiedSomeColumns = AttributeNamesUtilities.fullyQualified(Arrays.asList(someColumns))
+                .toArray(new String[someColumns.length]);
+        commandsGet = encryption.get(qualifiedSomeColumns, null);
 
         // Query the cloud
         results = new ArrayList<>();
@@ -131,7 +136,7 @@ public class Demo {
 
         // CASE 3: Find a single record with a Criterion (using entry ID)
         Criteria crit = new Criteria("meuseDB/meuse/gid", "=", "5");
-        commandsGet = encryption.get(attributes, new Criteria[] { crit });
+        commandsGet = encryption.get(qualifiedAttribs, new Criteria[] { crit });
 
         // Query the cloud
         results = new ArrayList<>();
@@ -153,11 +158,11 @@ public class Demo {
         System.out.print(aux.printCloudContents());
         System.out.println("********************************************");
 
-        // CASE 3: Find records with multiple criteria in different columns
+        // CASE 4: Find records with multiple criteria in different columns
         // NOTE - At the moment, using multiple criteria has an "and" semantics
         crit = new Criteria("meuseDB/meuse/gid", ">=", "20");
         Criteria crit2 = new Criteria("meuseDB/meuse/lead", ">=", "500");
-        commandsGet = encryption.get(attributes, new Criteria[] { crit, crit2 });
+        commandsGet = encryption.get(qualifiedAttribs, new Criteria[] { crit, crit2 });
 
         // Query the cloud
         results = new ArrayList<>();

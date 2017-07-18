@@ -2,12 +2,12 @@ package eu.clarussecure.dataoperations.encryption;
 
 import eu.clarussecure.dataoperations.Criteria;
 import eu.clarussecure.dataoperations.DataOperationCommand;
-import eu.clarussecure.dataoperations.Mapping;
+import java.util.Map;
 
 public class EncryptionCommand extends DataOperationCommand {
 
     public EncryptionCommand(String[] attributeNames, String[] protectedAttributeNames, String[][] protectedContents,
-            Mapping mapping, Criteria[] criteria) {
+            Map<String, String> mapping, Criteria[] criteria) {
         this.protectedAttributeNames = protectedAttributeNames;
         this.attributeNames = attributeNames;
         this.extraBinaryContent = null;

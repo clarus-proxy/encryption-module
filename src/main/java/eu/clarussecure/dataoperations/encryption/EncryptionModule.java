@@ -1,20 +1,21 @@
 package eu.clarussecure.dataoperations.encryption;
 
+import eu.clarussecure.dataoperations.AttributeNamesUtilities;
 import eu.clarussecure.dataoperations.Criteria;
 import eu.clarussecure.dataoperations.DataOperation;
 import eu.clarussecure.dataoperations.DataOperationCommand;
 import eu.clarussecure.dataoperations.DataOperationResult;
-import eu.clarussecure.dataoperations.Mapping;
 import eu.clarussecure.dataoperations.encryption.operators.Select;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.IvParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
 import org.w3c.dom.Document;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
@@ -22,28 +23,54 @@ import org.w3c.dom.NodeList;
 
 public class EncryptionModule implements DataOperation {
 
-    protected String attributeNamesKey = "Bar12345Bar12345"; // 16 chars * 8 bits = 128 bits cipher
-    protected String attributesInitVector = "RandomInitVector"; // Random 16 bytes Init Vector
-
     // Data extracted from the security policy
-    protected Map<String, String> attributeTypes = new HashMap<>(); // name->type
+    protected Map<String, String> attributeTypes = new HashMap<>(); // qualifName->type
     protected Map<String, String> typesProtection = new HashMap<>(); // type->protectionModule
     protected Map<String, String> typesDataIDs = new HashMap<>(); // type->idKey
     protected KeyStore keyStore = KeyStore.getInstance();
 
+    // Map of the fully-qualified Attribute Names
+    protected List<String> qualifiedAttributes = new ArrayList<>();
+
+    // Mapping to determine where to store each qualified name
+    protected int cloudsNumber;
+    protected Map<String, Integer> attributeClouds = new HashMap<>();
+
+    // Map between plain and encrypted attribute Names
+    protected Map<String, String> attributesMapping = new HashMap<>();
+
     public EncryptionModule(Document policy) {
+        // TODO - Extract the number of "endpoints" (aka Clouds) from the policy.
+        // At this point this number WILL BE HARD CODED!!!
+        this.cloudsNumber = 1;
+
         // First, get the types of each attribute and build the map
         NodeList nodes = policy.getElementsByTagName("attribute");
+        List<String> attributeNames = new ArrayList<>();
         for (int i = 0; i < nodes.getLength(); i++) {
             // Get the node and the list of its attributes
             Node node = nodes.item(i);
             NamedNodeMap attributes = node.getAttributes();
-            // Extract the reuqired attributes
+            // Extract the required attributes
             String attributeName = attributes.getNamedItem("name").getNodeValue();
             String attributeType = attributes.getNamedItem("attribute_type").getNodeValue();
             // Add the information to the map
             this.attributeTypes.put(attributeName, attributeType);
+            // Store the attribute names to fully qualify them
+            attributeNames.add(attributeName);
         }
+
+        // Fully qualify the attribute Names
+        this.qualifiedAttributes = AttributeNamesUtilities.fullyQualified(attributeNames);
+
+        // Replace the keys of the attributeTypes Map
+        this.attributeTypes = this.attributeTypes.keySet().stream() // Iterate over the keys of the original map 
+                .collect(Collectors.toMap( // Collect them in a new map 
+                        // The new key is the single one that in qualifiedAttributes such that the original key is suffix of the qualified one
+                        // (i.e. filter the qAttrs such that the qAttr ends with the original name)
+                        key -> this.qualifiedAttributes.stream().filter(k -> k.endsWith(key)).findAny().orElse(null),
+                        // The new value is the same of the original mapping
+                        key -> this.attributeTypes.get(key)));
 
         // Second , get the protection of each attribute type and their idKeys
         nodes = policy.getElementsByTagName("attribute_type");
@@ -62,6 +89,73 @@ public class EncryptionModule implements DataOperation {
                 this.typesDataIDs.put(attributeType, dataID);
             }
         }
+        // FIXME - Should the policy specify in which cloud to store the encrypted data?
+        // If so, this information should be available in the "attribute_type" tag
+        // so the "mapping" showing where to store each attribute should be built here.
+        /* Example:
+         * <endpoint id=1 protocol="prot" port="12345">
+         *   <parameters>
+         *      <parameter param="name1" value="val1" />
+         *   </parameters>
+         * </endpoint>
+         * <endpoint id=2 protocol="prot1" port="98765">
+         *   <parameters>
+         *      <parameter param="name3" value="val12" />
+         *   </parameters>
+         * </endpoint>
+         * ...
+         * <attribute_type
+         *   type="confidential"
+         *   protection="encryption"
+         *   id_key="176"
+         *   cloud="1">
+         */
+        // At the moment, the mapping will be done assuming the encrypted attributes go to the first cloud
+        this.qualifiedAttributes.forEach(qualifiedName -> this.attributeClouds.put(qualifiedName, 0));
+
+        // Generate the map between qualified Attributes and protected Attributes Names
+        this.attributesMapping = this.qualifiedAttributes.stream() // Get all the qualified Names
+                .collect(Collectors.toMap( // Reduce them into a new Map
+                        key -> key, // Use the same qualified Attribute Name as key
+                        key -> { // Generate the mapped values: the "encrypted" ones
+                            String attribEnc = null;
+                            try {
+                                // Obtain the dataID
+                                String dataID = this.typesDataIDs.get(this.attributeTypes.get(key));
+
+                                // Encrypt the column name only if the policy says so
+                                // Get the prpteciton type of this attribute
+                                String protection = this.typesProtection.get(this.attributeTypes.get(key));
+                                // Encrypt only if the protection type is "encryption" or "simple"
+                                if (protection.equals("encryption") || protection.equals("simple")) {
+                                    byte[] bytesAttribEnc;
+
+                                    // Initialize the Secret Key and the Init Vector of the Cipher
+                                    IvParameterSpec iv = new IvParameterSpec(this.keyStore.retrieveInitVector(dataID));
+                                    SecretKey sk = this.keyStore.retrieveKey(dataID);
+
+                                    Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+                                    cipher.init(Cipher.ENCRYPT_MODE, sk, iv);
+
+                                    // NOTE - To correctly encrypt, First cipher, THEN Base64 encode
+                                    bytesAttribEnc = cipher.doFinal(key.getBytes());
+                                    attribEnc = Base64.getEncoder().encodeToString(bytesAttribEnc);
+                                } else {
+                                    // Otherwise, just let the attribute name pass in plain text
+                                    attribEnc = key;
+                                }
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                                System.exit(1);
+                            }
+                            return attribEnc;
+                        }));
+    }
+
+    @Override
+    protected void finalize() throws Throwable {
+        super.finalize();
+        this.keyStore.deleteInstance();
     }
 
     @Override
@@ -69,38 +163,15 @@ public class EncryptionModule implements DataOperation {
         // IMPORTANT REMARK:
         // Since the encryption is not homomorphic, all the data must be retrieved
         // The selection of the rows will be done in the outboud GET, after decrypting the data
-        // First, obfuscate the required attribute names
-        String[] encAttributeNames = new String[attributeNames.length];
-        Mapping mapAttributes = new Mapping();
-        Base64.Encoder encoder = Base64.getEncoder();
 
-        try {
-            byte[][] byteAttributeNamesEnc;
-
-            // Initialize the Secret Key and the Init Vector of the Cipher
-            IvParameterSpec iv = new IvParameterSpec(this.attributesInitVector.getBytes("UTF-8"));
-            SecretKeySpec skeySpec = new SecretKeySpec(this.attributeNamesKey.getBytes("UTF-8"), "AES");
-
-            // Initialize the required instances of Ciphers
-            Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-            cipher.init(Cipher.ENCRYPT_MODE, skeySpec, iv);
-
-            // First, obfuscate the attribute Names and map them to the original ones
-            byteAttributeNamesEnc = new byte[attributeNames.length][];
-            for (int i = 0; i < attributeNames.length; i++) {
-                // NOTE - To correctly encrypt, First cipher, THEN Base64 encode
-                byteAttributeNamesEnc[i] = cipher.doFinal(attributeNames[i].getBytes());
-                encAttributeNames[i] = encoder.encodeToString(byteAttributeNamesEnc[i]);
-                mapAttributes.put(attributeNames[i], encAttributeNames[i]);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            System.exit(1);
-        }
+        // Generate the ORDERED list of the protected attributeNames
+        List<String> protectedAttributes = new ArrayList<>();
+        Stream.of(attributeNames)
+                .forEach(attributeName -> protectedAttributes.add(this.attributesMapping.get(attributeName)));
 
         // Third, create the Comman object
-        DataOperationCommand command = new EncryptionCommand(attributeNames, encAttributeNames, null, mapAttributes,
-                criteria);
+        DataOperationCommand command = new EncryptionCommand(attributeNames,
+                protectedAttributes.toArray(new String[attributeNames.length]), null, this.attributesMapping, criteria);
         List<DataOperationCommand> commands = new ArrayList<>();
         commands.add(command);
         return commands;
@@ -117,7 +188,7 @@ public class EncryptionModule implements DataOperation {
 
             String[] plainAttributeNames = new String[com.getProtectedAttributeNames().length];
             List<String[]> plainContents = new ArrayList<>();
-            Mapping mapAttributes = new Mapping();
+            Map<String, String> mapAttributes = new HashMap<>();
 
             Base64.Decoder decoder = Base64.getDecoder();
 
@@ -147,20 +218,32 @@ public class EncryptionModule implements DataOperation {
                 }
             }
 
-            // Second, decipher the data
+            // Second, decipher the attribute names
             try {
                 // First, decipher the attribute Names and map them to the origial ones
                 for (int i = 0; i < com.getProtectedAttributeNames().length; i++) {
-                    // Initialize the Secret Key and the Init Vector of the Cipher
-                    IvParameterSpec iv = new IvParameterSpec(this.attributesInitVector.getBytes("UTF-8"));
-                    SecretKeySpec skeySpec = new SecretKeySpec(this.attributeNamesKey.getBytes("UTF-8"), "AES");
+                    // Get the proteciton type of this attribute
+                    String protection = this.typesProtection.get(this.attributeTypes.get(com.getAttributeNames()[i]));
 
-                    // Initialize the required instances of Ciphers
-                    Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-                    cipher.init(Cipher.DECRYPT_MODE, skeySpec, iv);
-                    // NOTE - To correctly decrypt, first Base64 decode, THEN decipher
-                    byte[] bytesEncAttributeName = cipher.doFinal(decoder.decode(com.getProtectedAttributeNames()[i]));
-                    plainAttributeNames[i] = new String(bytesEncAttributeName);
+                    // Decrypt only if the protection type is "encryption" or "simple"
+                    if (protection.equals("encryption") || protection.equals("simple")) {
+                        // Obtain the dataID
+                        String dataID = this.typesDataIDs.get(this.attributeTypes.get(com.getAttributeNames()[i]));
+
+                        // Initialize the Secret Key and the Init Vector of the Cipher
+                        IvParameterSpec iv = new IvParameterSpec(this.keyStore.retrieveInitVector(dataID));
+                        SecretKey sk = this.keyStore.retrieveKey(dataID);
+
+                        // Initialize the required instances of Ciphers
+                        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+                        cipher.init(Cipher.DECRYPT_MODE, sk, iv);
+                        // NOTE - To correctly decrypt, first Base64 decode, THEN decipher
+                        byte[] bytesEncAttributeName = cipher
+                                .doFinal(decoder.decode(com.getProtectedAttributeNames()[i]));
+                        plainAttributeNames[i] = new String(bytesEncAttributeName);
+                    } else {
+                        plainAttributeNames[i] = com.getProtectedAttributeNames()[i];
+                    }
                     mapAttributes.put(com.getProtectedAttributeNames()[i], plainAttributeNames[i]);
                 }
 
@@ -182,9 +265,9 @@ public class EncryptionModule implements DataOperation {
 
                         String plainValue;
                         // Get the proteciton type of this attribute
-                        String protection = typesProtection.get(this.attributeTypes.get(plainAttributeNames[j]));
+                        String protection = this.typesProtection.get(this.attributeTypes.get(plainAttributeNames[j]));
 
-                        // Encrypt only if the protection type is "encryption" or "simple"
+                        // Decrypt only if the protection type is "encryption" or "simple"
                         if (protection.equals("encryption") || protection.equals("simple")) {
                             // Get the dataID
                             String dataID = this.typesDataIDs.get(this.attributeTypes.get(plainAttributeNames[j]));
@@ -235,40 +318,18 @@ public class EncryptionModule implements DataOperation {
 
     @Override
     public List<DataOperationCommand> post(String[] attributeNames, String[][] contents) {
-
-        String[] encAttributeNames = new String[attributeNames.length];
         String[][] encContents = new String[contents.length][attributeNames.length];
-        Mapping mapAttributes = new Mapping();
 
         Base64.Encoder encoder = Base64.getEncoder();
 
         try {
-            byte[][] byteAttributeNamesEnc;
-            byte[][][] bytesContentEnc;
-
-            // First, obfuscate the attribute Names and map them to the original ones
-            byteAttributeNamesEnc = new byte[attributeNames.length][];
-            for (int i = 0; i < attributeNames.length; i++) {
-                // Initialize the Secret Key and the Init Vector of the Cipher
-                IvParameterSpec iv = new IvParameterSpec(this.attributesInitVector.getBytes("UTF-8"));
-                SecretKeySpec skeySpec = new SecretKeySpec(this.attributeNamesKey.getBytes("UTF-8"), "AES");
-
-                // Initialize the required instances of Ciphers
-                Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-                cipher.init(Cipher.ENCRYPT_MODE, skeySpec, iv);
-                // NOTE - To correctly encrypt, First cipher, THEN Base64 encode
-                // Check 
-                byteAttributeNamesEnc[i] = cipher.doFinal(attributeNames[i].getBytes());
-                encAttributeNames[i] = encoder.encodeToString(byteAttributeNamesEnc[i]);
-                mapAttributes.put(attributeNames[i], encAttributeNames[i]);
-            }
+            byte[] bytesContentEnc;
 
             // Second, obfuscate the contents
-            bytesContentEnc = new byte[contents.length][attributeNames.length][];
             for (int i = 0; i < contents.length; i++) {
                 for (int j = 0; j < attributeNames.length; j++) {
                     // Get the prpteciton type of this attribute
-                    String protection = typesProtection.get(this.attributeTypes.get(attributeNames[j]));
+                    String protection = this.typesProtection.get(this.attributeTypes.get(attributeNames[j]));
                     // Encrypt only if the protection type is "encryption" or "simple"
                     if (protection.equals("encryption") || protection.equals("simple")) {
                         // Get the dataID
@@ -282,8 +343,8 @@ public class EncryptionModule implements DataOperation {
                         cipher.init(Cipher.ENCRYPT_MODE, key, iv);
 
                         // NOTE - To correctly encrypt, First cipher, THEN Base64 encode
-                        bytesContentEnc[i][j] = cipher.doFinal(contents[i][j].getBytes());
-                        encContents[i][j] = encoder.encodeToString(bytesContentEnc[i][j]);
+                        bytesContentEnc = cipher.doFinal(contents[i][j].getBytes());
+                        encContents[i][j] = encoder.encodeToString(bytesContentEnc);
                     } else {
                         // Simply copy the content
                         encContents[i][j] = contents[i][j];
@@ -295,9 +356,15 @@ public class EncryptionModule implements DataOperation {
             System.exit(1);
         }
 
+        // Generate the ORDERED list of the protected attributeNames
+        List<String> protectedAttributes = new ArrayList<>();
+        Stream.of(attributeNames)
+                .forEach(attributeName -> protectedAttributes.add(this.attributesMapping.get(attributeName)));
+
         // Encapsulate the output
-        DataOperationCommand command = new EncryptionCommand(attributeNames, encAttributeNames, encContents,
-                mapAttributes, null);
+        DataOperationCommand command = new EncryptionCommand(attributeNames,
+                protectedAttributes.toArray(new String[attributeNames.length]), encContents, this.attributesMapping,
+                null);
         List<DataOperationCommand> commands = new ArrayList<>();
         commands.add(command);
         return commands;
@@ -316,8 +383,12 @@ public class EncryptionModule implements DataOperation {
     }
 
     @Override
-    public List<Mapping> head(String[] attributeNames) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    public List<Map<String, String>> head(String[] attributeNames) {
+        List<Map<String, String>> aux = new ArrayList<>();
+        for (int i = 0; i < this.cloudsNumber; i++) {
+            // Insert the Mapping in the first place
+            aux.add(i == 0 ? this.attributesMapping : new HashMap<>());
+        }
+        return aux;
     }
-
 }
