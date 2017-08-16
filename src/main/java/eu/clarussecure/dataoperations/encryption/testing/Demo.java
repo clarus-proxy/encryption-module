@@ -161,7 +161,14 @@ public class Demo {
         // CASE 4: Find records with multiple criteria in different columns
         // NOTE - At the moment, using multiple criteria has an "and" semantics
         crit = new Criteria("meuseDB/meuse/gid", ">=", "20");
-        Criteria crit2 = new Criteria("meuseDB/meuse/lead", ">=", "500");
+        // IMPORTANT REMARK: Selection on encrypted columns are supported BUT limited to:
+        // * The ONLY supported operator is equals. Other operators are "searchable encryption"
+        // * The comparison is made between two encrypted strings. This implies that:
+        //   * The threshold will be treated ALWAYS as a string and cyphered AS IS for compare it
+        //   * In this sense, the strings "541" and "541.0" ARE NOT THE SAME and, therefore, will not compare correctly.
+        //     Extending this semantics requires making assumptions on the data.
+        Criteria crit2 = new Criteria("meuseDB/meuse/lead", "=", "541.000000000000000");
+        // Considering these two criteria, the only row that matches both of the is entry with GID=69
         commandsGet = encryption.get(qualifiedAttribs, new Criteria[] { crit, crit2 });
 
         // Query the cloud
@@ -183,6 +190,7 @@ public class Demo {
         System.out.println("****************DECRYPTED-4*****************");
         System.out.print(aux.printCloudContents());
         System.out.println("********************************************");
+
     }
 
     private static String[] readColumnNames(String filename) throws IOException {

@@ -6,6 +6,7 @@ public abstract class Select {
 
     // This is the funciton that will decide whether a data is selected or not
     // It MUST be implemented by all the sub classes.
+    // This is the threshold: the value to compare with
     protected String threshold;
 
     public abstract boolean select(String data);
@@ -19,6 +20,8 @@ public abstract class Select {
             return new Equals(threshold);
         case ">=":
             return new GreaterOrEqual(threshold);
+        case "s=":
+            return new StringEquals(threshold);
         default:
             throw new UnsupportedOperationException("The operator '" + operator + "' is not supported.");
         }

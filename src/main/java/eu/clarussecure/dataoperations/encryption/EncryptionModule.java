@@ -164,10 +164,58 @@ public class EncryptionModule implements DataOperation {
         // Since the encryption is not homomorphic, all the data must be retrieved
         // The selection of the rows will be done in the outboud GET, after decrypting the data
 
-        // Generate the ORDERED list of the protected attributeNames
+        // First, Generate the ORDERED list of the protected attributeNames
         List<String> protectedAttributes = new ArrayList<>();
         Stream.of(attributeNames)
                 .forEach(attributeName -> protectedAttributes.add(this.attributesMapping.get(attributeName)));
+
+        // Second, process the Criteria to transform the requested AttributeNames to the protected ones
+        if (criteria != null) {
+            Stream.of(criteria).forEach(criterion -> {
+                // Determine if the column is encrypted of not
+                String protectedAttribute = this.attributesMapping.get(criterion.getAttributeName());
+                if (!criterion.getAttributeName().equals(protectedAttribute)) {
+                    // The protected and unprotected Attribute Names do not match
+                    // This implies the criteria operates over an encrypted column
+                    // First, modify the operator to use a String comparator
+                    criterion.setOperator("s=");
+                    // Second, encrypt the treshold
+                    String protectedThreshold = "";
+                    try {
+                        // Obtain the dataID
+                        String dataID = this.typesDataIDs.get(this.attributeTypes.get(criterion.getAttributeName()));
+
+                        // Get the prpteciton type of this attribute
+                        String protection = this.typesProtection
+                                .get(this.attributeTypes.get(criterion.getAttributeName()));
+                        // Encrypt only if the protection type is "encryption" or "simple"
+                        if (protection.equals("encryption") || protection.equals("simple")) {
+                            byte[] bytesAttribEnc;
+
+                            // Initialize the Secret Key and the Init Vector of the Cipher
+                            IvParameterSpec iv = new IvParameterSpec(this.keyStore.retrieveInitVector(dataID));
+                            SecretKey sk = this.keyStore.retrieveKey(dataID);
+
+                            Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+                            cipher.init(Cipher.ENCRYPT_MODE, sk, iv);
+
+                            // NOTE - To correctly encrypt, First cipher, THEN Base64 encode
+                            bytesAttribEnc = cipher.doFinal(criterion.getValue().getBytes());
+                            protectedThreshold = Base64.getEncoder().encodeToString(bytesAttribEnc);
+                        } else {
+                            // Otherwise, just let the attribute name pass in plain text
+                            protectedThreshold = criterion.getAttributeName();
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        System.exit(1);
+                    }
+                    criterion.setValue(protectedThreshold);
+                    // Third, substitute the involved attribute name with its protected one
+                    criterion.setAttributeName(this.attributesMapping.get(criterion.getAttributeName()));
+                }
+            });
+        }
 
         // Third, create the Comman object
         DataOperationCommand command = new EncryptionCommand(attributeNames,
@@ -191,32 +239,6 @@ public class EncryptionModule implements DataOperation {
             Map<String, String> mapAttributes = new HashMap<>();
 
             Base64.Decoder decoder = Base64.getDecoder();
-
-            // First, parse the selection criteria and prepare the Select instances
-            Map<String, List<Select>> selectorsSet = new HashMap<>();
-
-            if (com.getCriteria() == null) {
-                // There is no criteria, use the Identity Function
-                List<Select> selectors = selectorsSet.get("all");
-                if (selectors == null) {
-                    selectors = new ArrayList<>();
-                    selectorsSet.put("all", selectors);
-                }
-                selectors.add(Select.getInstance("id", "")); // No threshold is required for the identity
-            } else {
-                // There are criteria. Build the selectors
-                for (Criteria crit : com.getCriteria()) {
-                    // Get the selectors of the attribute
-                    List<Select> selectors = selectorsSet.get(crit.getAttributeName());
-                    // Create the list of it does not exist
-                    if (selectors == null) {
-                        selectors = new ArrayList<>();
-                        selectorsSet.put(crit.getAttributeName(), selectors);
-                    }
-                    // Add the current selector to the list
-                    selectors.add(Select.getInstance(crit.getOperator(), crit.getValue()));
-                }
-            }
 
             // Second, decipher the attribute names
             try {
@@ -250,18 +272,7 @@ public class EncryptionModule implements DataOperation {
                 // Second, decipher the contents
                 for (int i = 0; i < content.length; i++) {
                     String[] row = new String[plainAttributeNames.length]; // Reconstructed row
-                    boolean selected = true; // to decide if the row should be included in teh result or not
                     for (int j = 0; j < plainAttributeNames.length; j++) {
-                        // We assume the attribute names are in the same order of the content
-                        // Get the selectors of this attribute
-                        List<Select> attributeSelectors = selectorsSet.get(plainAttributeNames[j]);
-                        // if no selectors were found, simply insert the identity
-                        if (attributeSelectors == null)
-                            attributeSelectors = new ArrayList<>();
-                        // Do not forget the filters applied to "all";
-                        if (selectorsSet.get("all") != null) {
-                            attributeSelectors.addAll(selectorsSet.get("all"));
-                        }
 
                         String plainValue;
                         // Get the proteciton type of this attribute
@@ -288,20 +299,11 @@ public class EncryptionModule implements DataOperation {
                             // Simply copy the content
                             plainValue = content[i][j];
                         }
-
-                        // Evaluate each attribute selector
-                        for (Select selector : attributeSelectors) {
-                            // Decide if the row should be selected or not
-                            // NOTE - This line gives the "and" semantics to multiple criteria
-                            selected = selected && selector.select(plainValue);
-                        }
+                        // Add the computed value (deciphered or not to the row
                         row[j] = plainValue;
                     }
-                    // Add the column only if all the selectors have passed
-                    if (selected) {
-                        rowCount++;
-                        plainContents.add(row);
-                    }
+                    // Add the row to the final result
+                    plainContents.add(row);
                 }
             } catch (Exception e) {
                 e.printStackTrace();
