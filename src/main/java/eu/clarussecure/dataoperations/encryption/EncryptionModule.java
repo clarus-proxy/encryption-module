@@ -324,11 +324,24 @@ public class EncryptionModule implements DataOperation {
             for (int i = 0; i < contents.length; i++) {
                 for (int j = 0; j < attributeNames.length; j++) {
                     // Get the prpteciton type of this attribute
-                    String protection = this.typesProtection.get(this.attributeTypes.get(attributeNames[j]));
+                    // Find which "protectionRule" (in the keyset of attributeTypes) matches the given attribute name
+                    String matchedProtection = null;
+                    for(String protectionRule : this.attributeTypes.keySet()){
+                        Pattern p = Pattern.compile(AttributeNamesUtilities.escapeRegex(protectionRule));
+                        if(p.matcher(attributeNames[j]).matches()){
+                            matchedProtection = protectionRule;
+                        }
+                    }
+
+                    // If none matches, ignore this attribute => it is not convered by the Policy
+                    if(matchedProtection == null)
+                        continue;
+                    
+                    String protection = this.typesProtection.get(this.attributeTypes.get(matchedProtection));
                     // Encrypt only if the protection type is "encryption" or "simple"
                     if (protection.equals("encryption") || protection.equals("simple")) {
                         // Get the dataID
-                        String dataID = this.typesDataIDs.get(this.attributeTypes.get(attributeNames[j]));
+                        String dataID = this.typesDataIDs.get(this.attributeTypes.get(matchedProtection));
 
                         // Get the Key, Initialization Vector and initialize the Cipher
                         SecretKey key = this.keyStore.retrieveKey(dataID);
@@ -386,7 +399,7 @@ public class EncryptionModule implements DataOperation {
         Set<String> filteredAttributes = new HashSet<>(Arrays.asList(resolvedAttributes));
         // Then build the Attributes Mapping AND filter the ones not concerned
         Map<String, String> attribsMapping = filterMapingEntries(this.buildAttributesMapping(filteredAttributes.toArray(new String[filteredAttributes.size()]),
-                attrib -> EncryptionModule.TO_BE_FILTERED_FLAG, // Not covered Attributes will be marked for later filtering
+                attrib -> attrib, // Not covered Attributes will NOT be marked for later filtering
                 attrib -> EncryptionModule.TO_BE_FILTERED_FLAG)); // Not protected Attributes will be marked for later filtering
         List<Map<String, String>> aux = new ArrayList<>();
         for (int i = 0; i < this.cloudsNumber; i++) {
