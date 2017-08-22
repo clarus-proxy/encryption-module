@@ -42,9 +42,6 @@ public class EncryptionModule implements DataOperation {
     protected int cloudsNumber;
     //protected Map<String, Integer> attributeClouds = new HashMap<>();
 
-    // Map between plain and encrypted attribute Names
-    //protected Map<String, String> attributesMapping = new HashMap<>();
-
     public EncryptionModule(Document policy) {
         // TODO - Extract the number of "endpoints" (aka Clouds) from the policy.
         // At this point this number WILL BE HARD CODED!!!
@@ -62,20 +59,6 @@ public class EncryptionModule implements DataOperation {
             // Add the information to the map
             this.attributeTypes.put(attributeName, attributeType);
         }
-
-        /*
-        // Fully qualify the attribute Names
-        this.qualifiedAttributes = AttributeNamesUtilities.fullyQualified(attributeNames);
-
-        // Replace the keys of the attributeTypes Map
-        this.attributeTypes = this.attributeTypes.keySet().stream() // Iterate over the keys of the original map 
-                .collect(Collectors.toMap( // Collect them in a new map 
-                        // The new key is the single one that in qualifiedAttributes such that the original key is suffix of the qualified one
-                        // (i.e. filter the qAttrs such that the qAttr ends with the original name)
-                        key -> this.qualifiedAttributes.stream().filter(k -> k.endsWith(key)).findAny().orElse(null),
-                        // The new value is the same of the original mapping
-                        key -> this.attributeTypes.get(key)));
-        */
 
         // Second , get the protection of each attribute type and their idKeys
         nodes = policy.getElementsByTagName("attribute_type");
@@ -151,12 +134,25 @@ public class EncryptionModule implements DataOperation {
                     // Second, encrypt the treshold
                     String protectedThreshold = "";
                     try {
+                        // Find which "protectionRule" (in the keyset of attributeTypes) matches the given attribute name
+                        String matchedProtection = null;
+                        for(String protectionRule : this.attributeTypes.keySet()){
+                            Pattern p = Pattern.compile(AttributeNamesUtilities.escapeRegex(protectionRule));
+                            if(p.matcher(criterion.getAttributeName()).matches()){
+                                matchedProtection = protectionRule;
+                            }
+                        }
+
+                        // If none matches, ignore this attribute => it is not convered by the Policy
+                        if(matchedProtection == null)
+                            return;
+                        
                         // Obtain the dataID
-                        String dataID = this.typesDataIDs.get(this.attributeTypes.get(criterion.getAttributeName()));
+                        String dataID = this.typesDataIDs.get(this.attributeTypes.get(matchedProtection));
 
                         // Get the prpteciton type of this attribute
                         String protection = this.typesProtection
-                                .get(this.attributeTypes.get(criterion.getAttributeName()));
+                                .get(this.attributeTypes.get(matchedProtection));
                         // Encrypt only if the protection type is "encryption" or "simple"
                         if (protection.equals("encryption") || protection.equals("simple")) {
                             byte[] bytesAttribEnc;
@@ -430,7 +426,7 @@ public class EncryptionModule implements DataOperation {
     private Map<String,String> buildAttributesMapping(String[] attributes, Function<String, String> notCoveredTransform, Function<String,String> notProtected){
         // NOTE: The "notCoveredTransform" function will say what to do with the attributes non-covered by the security policy.
         // NOTE: The "notProtected" function will say what to do with the attributes covered by the security policy but not using this module
-        // FIXME - Create the mapping between the given attribute names and their protected names
+        // Create the mapping between the given attribute names and their protected names
         // This mapping must be done considering the list of attributes to protect specified in the security policy
         // Generate the map between qualified Attributes and protected Attributes Names
         Map<String,String> mapping;
