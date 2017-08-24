@@ -168,8 +168,8 @@ public class EncryptionModule implements DataOperation {
                             bytesAttribEnc = cipher.doFinal(criterion.getValue().getBytes());
                             protectedThreshold = Base64.getEncoder().encodeToString(bytesAttribEnc);
                         } else {
-                            // Otherwise, just let the attribute name pass in plain text
-                            protectedThreshold = criterion.getAttributeName();
+                            // Otherwise, just let the value pass in plain text
+                            protectedThreshold = criterion.getValue();
                         }
                     } catch (Exception e) {
                         e.printStackTrace();
