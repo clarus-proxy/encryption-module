@@ -1,21 +1,22 @@
 package eu.clarussecure.dataoperations.encryption;
 
-import eu.clarussecure.dataoperations.DataOperationResult;
+import java.util.Random;
 
-public class EncryptionResult extends DataOperationResult {
-    private String[][] decryptedContent;
-    private String[] decryptedAttributeNames;
+import eu.clarussecure.dataoperations.DataOperationResponse;
 
-    public EncryptionResult(String[] attributeNames, String[][] content) {
-        this.decryptedAttributeNames = attributeNames;
-        this.decryptedContent = content;
+public class EncryptionResult extends DataOperationResponse {
+
+    public EncryptionResult(String[] attributeNames, String[][] contents) {
+        super.id = new Random().nextInt();
+        super.attributeNames = attributeNames; // headers originales
+        super.contents = contents;
     }
 
     public String[][] getDecryptedContent() {
-        return this.decryptedContent;
+        return this.contents;
     }
 
     public String[] getDecryptedAttributeNames() {
-        return this.decryptedAttributeNames;
+        return this.attributeNames;
     }
 }
