@@ -6,9 +6,13 @@ import com.mongodb.client.MongoCursor;
 import com.mongodb.client.MongoDatabase;
 import static com.mongodb.client.model.Filters.eq;
 import com.mongodb.client.model.UpdateOptions;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.crypto.KeyGenerator;
@@ -23,16 +27,23 @@ public class KeyStore {
     private final MongoCollection<Document> keystoreCollection;
     private int instancesNumber;
 
+    private String confFile = "/etc/clarus/clarus-mgmt-tools.conf";
+    private String mongoDBHostname = "localhost"; // Default server
+    private int mongoDBPort = 27017; // Default port
+    private String clarusDBName = "CLARUS"; // Default DB name
+
     private KeyStore() {
         // Initiate the basic connections to the database
         // Correctly configure the log level
         Logger mongoLogger = Logger.getLogger("org.mongodb.driver");
         mongoLogger.setLevel(Level.SEVERE);
-        // Create a new client connecting to "localhost" on port
-        this.mongoClient = new MongoClient("localhost", 27017);
+        // Open the configuraiton file to extract the information from it.
+        this.processConfigurationFile();
+        // Create a new client connecting to "localhost" on port 
+        this.mongoClient = new MongoClient(this.mongoDBHostname, this.mongoDBPort);
 
         // Get the database (will be created if not present)
-        this.db = mongoClient.getDatabase("CLARUS");
+        this.db = mongoClient.getDatabase(this.clarusDBName);
         this.keystoreCollection = this.db.getCollection("keystore");
 
         this.instancesNumber++;
@@ -107,7 +118,7 @@ public class KeyStore {
         try {
             // Generate new Key for AES algorithm
             KeyGenerator keygen = KeyGenerator.getInstance("AES");
-            keygen.init(128);
+            keygen.init(this.getKeyLength());
             key = keygen.generateKey();
 
             // Encode it into a String
@@ -134,5 +145,33 @@ public class KeyStore {
             System.exit(1);
         }
         return false;
+    }
+    
+    private int getKeyLength(){
+        // This method should retrieve the key length (in bits) from the DB
+        MongoCursor<Document> cursor = this.keystoreCollection.find(eq("conf", "simple-keylength")).iterator();
+        
+        int keyLength = 128; // Default value is 128 bits
+        while(cursor.hasNext()){
+            keyLength = cursor.next().getInteger("keylength");
+        }
+        return keyLength;
+    }
+    
+    private void processConfigurationFile() throws RuntimeException {
+        // Open the file in read-only mode. This will avoid any permission problem
+        try {
+            // Read all the lines and join them in a single string
+            List<String> lines = Files.readAllLines(Paths.get(this.confFile));
+            String content = lines.stream().reduce("", (a, b) -> a + b);
+
+            // Use the bson document parser to extract the info
+            Document doc = Document.parse(content);
+            this.mongoDBHostname = doc.getString("CLARUS_policies_db_hostname");
+            this.mongoDBPort = doc.getInteger("CLARUS_policies_db_port");
+            this.clarusDBName = doc.getString("CLARUS_policies_db_name");
+        } catch (IOException e) {
+            throw new RuntimeException("CLARUS configuration file could not be processed", e);
+        }
     }
 }
