@@ -146,18 +146,18 @@ public class KeyStore {
         }
         return false;
     }
-    
-    private int getKeyLength(){
+
+    private int getKeyLength() {
         // This method should retrieve the key length (in bits) from the DB
         MongoCursor<Document> cursor = this.keystoreCollection.find(eq("conf", "simple-keylength")).iterator();
-        
+
         int keyLength = 128; // Default value is 128 bits
-        while(cursor.hasNext()){
-            keyLength = cursor.next().getInteger("keylength");
+        while (cursor.hasNext()) {
+            keyLength = cursor.next().getDouble("keylength").intValue();
         }
         return keyLength;
     }
-    
+
     private void processConfigurationFile() throws RuntimeException {
         // Open the file in read-only mode. This will avoid any permission problem
         try {
