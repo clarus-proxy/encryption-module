@@ -40,7 +40,7 @@ Please refer to its README.md to compile this project.
 
 Once this requirement is met, the Encryption Module can be downloaded and compiled:
 
-<<<<<<< HEAD
+
 `# Get the code`
 
 `git clone git@github.com:clarus-proxy/encryption-module.git`
