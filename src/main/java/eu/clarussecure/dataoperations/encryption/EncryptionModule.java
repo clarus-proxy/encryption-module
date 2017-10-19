@@ -460,7 +460,7 @@ public class EncryptionModule implements DataOperation {
         String[][] encContents = new String[contents.length][attributeNames.length];
 
         Base64.Encoder encoder = Base64.getEncoder();
-
+        
         // Create the mapping between the given Attribute Names and the protected ones.
         // This method uses the "buildAttributesMapping" function, letting the not covered and unprotected attributes pass
         // (i.e. not marking them since this mapping WILL NOT be filtered later)
