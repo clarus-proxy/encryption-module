@@ -52,7 +52,7 @@ Once this requirement is met, the Encryption Module can be downloaded and compil
 
 `mvn install`
 
-After this procedure, the compiled jar file can be found under `target/dataoperations.encryption-(version)-SNAPSHOT.jar`
+After this procedure, the compiled jar file can be found under `target/dataoperations.encryption-(version).jar`
 
 Finally, it is required to install the configuraiton file in the machine.
 This is done by executing the script `install_conf.sh` as superuser. This is

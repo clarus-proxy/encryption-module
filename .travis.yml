@@ -1,0 +1,6 @@
+language: java
+jdk:
+    - openjdk8
+    - oraclejdk8
+install:
+    - git clone https://github.com/clarus-proxy/dataoperations-api.git && cd dataoperations-api && mvn install && cd ..
