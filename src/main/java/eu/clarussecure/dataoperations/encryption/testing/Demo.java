@@ -25,7 +25,7 @@ import org.xml.sax.SAXException;
 
 public class Demo {
     public final static String POLICY_FILENAME = "/Users/diego/Dropbox/Montimage/CLARUS//sec-pol-examples/enc-pol.xml";
-    public final static String DATA_FILENAME = "/Users/diego/Dropbox/Montimage/CLARUS/sec-pol-examples/meuse2.txt";
+    public final static String DATA_FILENAME = "/Users/diego/Dropbox/Montimage/CLARUS/sec-pol-examples/meuse-1m.txt";
 
     public static void main(String[] args) throws IOException, SAXException, ParserConfigurationException {
         // Read the data from the file
@@ -33,6 +33,17 @@ public class Demo {
         String[] qualifiedAttribs = AttributeNamesUtilities.fullyQualified(Arrays.asList(attributes))
                 .toArray(new String[attributes.length]);
         String[][] data = readData(DATA_FILENAME);
+
+        // Parse the XML security policy
+        DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+        DocumentBuilder db = dbf.newDocumentBuilder();
+        Document policy = db.parse(new File(POLICY_FILENAME));
+
+        // Instantiate the Clarus Encryption Module
+        DataOperation encryption = new EncryptionModule(policy);
+
+        // Uncomment this line to perform performance tests
+        //performanceTest(encryption, qualifiedAttribs, data);
 
         // Initialize the "cloud" to execute the commands
         Cloud cloud = null;
@@ -43,14 +54,6 @@ public class Demo {
         System.out.println("*****************ORIGINAL*******************");
         System.out.print(untouchedCloud.printCloudContents());
         System.out.println("********************************************");
-
-        // Parse the XML security policy
-        DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-        DocumentBuilder db = dbf.newDocumentBuilder();
-        Document policy = db.parse(new File(POLICY_FILENAME));
-
-        // Instantiate the Clarus Encryption Module
-        DataOperation encryption = new EncryptionModule(policy);
 
         // Test the head function
         testHeadFunction(encryption);
@@ -170,7 +173,7 @@ public class Demo {
         //   * The threshold will be treated ALWAYS as a string and cyphered AS IS for compare it
         //   * In this sense, the strings "541" and "541.0" ARE NOT THE SAME and, therefore, will not compare correctly.
         //     Extending this semantics requires making assumptions on the data.
-        Criteria crit2 = new Criteria("meuseDB/meuse/lead", "=", "541.000000000000000");
+        Criteria crit2 = new Criteria("meuseDB/meuse/lead", "s=", "541.000000000000000");
         // Considering these two criteria, the only row that matches both of the is entry with GID=69
         commandsGet = encryption.get(qualifiedAttribs, new Criteria[] { crit, crit2 });
 
@@ -194,6 +197,47 @@ public class Demo {
         System.out.print(aux.printCloudContents());
         System.out.println("********************************************");
 
+    }
+
+    private static void performanceTest(DataOperation encryption, String[] qualifiedAttribs, String[][] data) {
+        // First "POST" to the cloud
+        long ti, tf;
+
+        // Initialize the "cloud" to execute the commands
+        Cloud cloud = null;
+
+        ti = System.currentTimeMillis(); // Start time
+        List<DataOperationCommand> commandsPost = encryption.post(qualifiedAttribs, data);
+        tf = System.currentTimeMillis(); // End time
+
+        cloud = new Cloud(commandsPost.get(0).getProtectedAttributeNames());
+
+        // Query the cloud
+        for (DataOperationCommand command : commandsPost) {
+            cloud.addRows(command.getProtectedContents());
+        }
+
+        System.out.println("POST time = " + (tf - ti));
+
+        // Second, "GET" from the cloud
+        List<DataOperationCommand> commandsGet = encryption.get(qualifiedAttribs, null);
+
+        // Query the cloud
+        List<String[][]> results = new ArrayList<>();
+        for (DataOperationCommand command : commandsGet) {
+            // Get all the columns from the database
+            String[][] partialResult = cloud.getRows(command.getProtectedAttributeNames(), command.getCriteria());
+            results.add(partialResult);
+        }
+
+        // Recover the original values
+        ti = System.currentTimeMillis(); // Start time
+        List<DataOperationResult> r = encryption.get(commandsGet, results);
+        tf = System.currentTimeMillis(); // End time
+
+        System.out.println("GET time = " + (tf - ti));
+
+        System.exit(0);
     }
 
     private static void testHeadFunction(DataOperation module) {

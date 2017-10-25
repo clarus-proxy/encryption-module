@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>eu.clarussecure</groupId>
     <artifactId>dataoperations.encryption</artifactId>
-    <version>0.2-SNAPSHOT</version>
+    <version>1.0.1</version>
     <packaging>jar</packaging>
     <dependencies>
         <dependency>
@@ -15,6 +15,11 @@
             <groupId>${project.groupId}</groupId>
             <artifactId>dataoperations-api</artifactId>
             <version>2.5</version>
+        </dependency>
+        <dependency>
+            <groupId>net.postgis</groupId>
+            <artifactId>postgis-jdbc</artifactId>
+            <version>2.2.1</version>
         </dependency>
     </dependencies>
     <properties>
