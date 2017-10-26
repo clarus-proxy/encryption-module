@@ -51,6 +51,10 @@ public class EncryptionModule implements DataOperation {
     protected Map<String, String> typesProtection = new HashMap<>(); // type->protectionModule
     protected Map<String, String> typesDataIDs = new HashMap<>(); // type->idKey
     protected KeyStore keyStore = KeyStore.getInstance();
+    
+    // ISSUE 3 - This flag was intreoduced to mark all the attribute types
+    // declared in the "data" section of the XML
+    protected final static String NULL_PROTECTION_FLAG = "NULL_PROTECTION";
 
     // Mapping to determine where to store each qualified name
     protected int cloudsNumber;
@@ -75,6 +79,13 @@ public class EncryptionModule implements DataOperation {
             // Add the information to the map
             this.attributeTypes.put(attributeName, attributeType);
             this.dataTypes.put(attributeName, dataType);
+            // ISSUE 3 - Concerning attribute types not protected.
+            // The problem raises because not all the attribute types declared in
+            // attributes list are associated with a protection module (or a "null"
+            // protection module)
+            // At this point, we are analyzing ALL the declared attributes
+            // Use this opportunity to pre-fill the typesProtection map
+            this.typesProtection.put(attributeType, EncryptionModule.NULL_PROTECTION_FLAG);
         }
 
         // Second , get the protection of each attribute type and their idKeys
