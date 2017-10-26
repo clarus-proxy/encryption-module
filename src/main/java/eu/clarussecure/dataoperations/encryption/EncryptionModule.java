@@ -51,7 +51,7 @@ public class EncryptionModule implements DataOperation {
     protected Map<String, String> typesProtection = new HashMap<>(); // type->protectionModule
     protected Map<String, String> typesDataIDs = new HashMap<>(); // type->idKey
     protected KeyStore keyStore = KeyStore.getInstance();
-    
+
     // ISSUE 3 - This flag was intreoduced to mark all the attribute types
     // declared in the "data" section of the XML
     protected final static String NULL_PROTECTION_FLAG = "NULL_PROTECTION";
@@ -159,30 +159,29 @@ public class EncryptionModule implements DataOperation {
                     // match
                     // This implies the criteria operates over an encrypted
                     // column
-//                    // First, modify the operator to use a String comparator
-//                    criterion.setOperator("s=");
+                    // First, modify the operator to use a String comparator
+                    // criterion.setOperator("s=");
                     // Second, encrypt the treshold
                     String protectedThreshold = "";
                     try {
                         // Find which "protectionRule" (in the keyset of attributeTypes) matches the given attribute name
                         String matchedProtection = null;
-                        for(String protectionRule : this.attributeTypes.keySet()){
+                        for (String protectionRule : this.attributeTypes.keySet()) {
                             Pattern p = Pattern.compile(AttributeNamesUtilities.escapeRegex(protectionRule));
-                            if(p.matcher(criterion.getAttributeName()).matches()){
+                            if (p.matcher(criterion.getAttributeName()).matches()) {
                                 matchedProtection = protectionRule;
                             }
                         }
 
                         // If none matches, ignore this attribute => it is not convered by the Policy
-                        if(matchedProtection == null)
+                        if (matchedProtection == null)
                             return;
 
                         // Obtain the dataID
                         String dataID = this.typesDataIDs.get(this.attributeTypes.get(matchedProtection));
 
                         // Get the prpteciton type of this attribute
-                        String protection = this.typesProtection
-                                .get(this.attributeTypes.get(matchedProtection));
+                        String protection = this.typesProtection.get(this.attributeTypes.get(matchedProtection));
                         // Encrypt only if the protection type is "encryption"
                         // or "simple"
                         if (protection.equals("encryption") || protection.equals("simple")) {
@@ -239,7 +238,8 @@ public class EncryptionModule implements DataOperation {
                                             box.getURT().y = Double.MAX_VALUE;
                                         }
                                         if (criterion.getOperator().equals("area")) {
-                                            value = box.getLLB().x + ", " + box.getLLB().y + ", " + box.getURT().x + ", " + box.getURT().y + ", " + srid;
+                                            value = box.getLLB().x + ", " + box.getLLB().y + ", " + box.getURT().x
+                                                    + ", " + box.getURT().y + ", " + srid;
                                         }
                                     }
                                     if (!criterion.getOperator().equals("area")) {
@@ -301,38 +301,16 @@ public class EncryptionModule implements DataOperation {
                 // First, decipher the attribute Names and map them to the
                 // origial ones
                 for (int i = 0; i < com.getProtectedAttributeNames().length; i++) {
-                    /*
-                     * // Get the proteciton type of this attribute String
-                     * protection =
-                     * this.typesProtection.get(this.attributeTypes.get(
-                     * matchedProtection));
-                     *
-                     * // Decrypt only if the protection type is "encryption" or
-                     * "simple" if (protection.equals("encryption") ||
-                     * protection.equals("simple")) { // Obtain the dataID
-                     * String dataID =
-                     * this.typesDataIDs.get(this.attributeTypes.get(
-                     * matchedProtection));
-                     *
-                     * // Initialize the Secret Key and the Init Vector of the
-                     * Cipher IvParameterSpec iv = new
-                     * IvParameterSpec(this.keyStore.retrieveInitVector(dataID))
-                     * ; SecretKey sk = this.keyStore.retrieveKey(dataID);
-                     *
-                     * // Initialize the required instances of Ciphers Cipher
-                     * cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-                     * cipher.init(Cipher.DECRYPT_MODE, sk, iv); // NOTE - To
-                     * correctly decrypt, first Base64 decode, THEN decipher
-                     * byte[] bytesEncAttributeName = cipher
-                     * .doFinal(decoder.decode(com.getProtectedAttributeNames()[
-                     * i])); plainAttributeNames[i] = new
-                     * String(bytesEncAttributeName); } else {
-                     * plainAttributeNames[i] =
-                     * com.getProtectedAttributeNames()[i]; }
-                     */
+                    // The "_enc" suffix was added to identify encrypted attributes
                     if (com.getProtectedAttributeNames()[i].endsWith("_enc")) {
-                        plainAttributeNames[i] = com.getProtectedAttributeNames()[i].substring(0,
-                                com.getProtectedAttributeNames()[i].length() - 4);
+                        // Get the mapping of the protected attributes
+                        Map<String, String> protAttribNames = com.getMapping();
+                        // "Invert" The Mapping
+                        Map<String, String> invertedMap = protAttribNames.entrySet().stream()
+                                .collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
+                        // As we have the "inverted" mapping, deciphering is as
+                        // simple as map the encrypted values
+                        plainAttributeNames[i] = invertedMap.get(com.getProtectedAttributeNames()[i]);
                     } else {
                         plainAttributeNames[i] = com.getProtectedAttributeNames()[i];
                     }
@@ -471,11 +449,12 @@ public class EncryptionModule implements DataOperation {
         String[][] encContents = new String[contents.length][attributeNames.length];
 
         Base64.Encoder encoder = Base64.getEncoder();
-        
+
         // Create the mapping between the given Attribute Names and the protected ones.
         // This method uses the "buildAttributesMapping" function, letting the not covered and unprotected attributes pass
         // (i.e. not marking them since this mapping WILL NOT be filtered later)
-        Map<String, String> attributesMapping = this.buildAttributesMapping(attributeNames, notCoveredAttrib -> notCoveredAttrib, unprotectedAttrib -> unprotectedAttrib);
+        Map<String, String> attributesMapping = this.buildAttributesMapping(attributeNames,
+                notCoveredAttrib -> notCoveredAttrib, unprotectedAttrib -> unprotectedAttrib);
 
         try {
             byte[] bytesContentEnc;
@@ -486,15 +465,15 @@ public class EncryptionModule implements DataOperation {
                     // Get the prpteciton type of this attribute
                     // Find which "protectionRule" (in the keyset of attributeTypes) matches the given attribute name
                     String matchedProtection = null;
-                    for(String protectionRule : this.attributeTypes.keySet()){
+                    for (String protectionRule : this.attributeTypes.keySet()) {
                         Pattern p = Pattern.compile(AttributeNamesUtilities.escapeRegex(protectionRule));
-                        if(p.matcher(attributeNames[j]).matches()){
+                        if (p.matcher(attributeNames[j]).matches()) {
                             matchedProtection = protectionRule;
                         }
                     }
 
                     // If none matches, ignore this attribute => it is not convered by the Policy
-                    if(matchedProtection == null)
+                    if (matchedProtection == null)
                         continue;
 
                     String protection = this.typesProtection.get(this.attributeTypes.get(matchedProtection));
@@ -561,8 +540,7 @@ public class EncryptionModule implements DataOperation {
 
         // Encapsulate the output
         DataOperationCommand command = new EncryptionCommand(attributeNames,
-                protectedAttributes.toArray(new String[attributeNames.length]), encContents, attributesMapping,
-                null);
+                protectedAttributes.toArray(new String[attributeNames.length]), encContents, attributesMapping, null);
         List<DataOperationCommand> commands = new ArrayList<>();
         commands.add(command);
         return commands;
@@ -570,76 +548,76 @@ public class EncryptionModule implements DataOperation {
 
     private double encryptDouble(Cipher cipher, double value, double maxValue)
             throws ShortBufferException, IllegalBlockSizeException, BadPaddingException {
-        long rawBits = Double.doubleToRawLongBits(value);       // e.g. clear: 0xa3412345678abcde
+        long rawBits = Double.doubleToRawLongBits(value); // e.g. clear: 0xa3412345678abcde
         // separate encryption of the exponent and of the significand to
         // preserve validity regarding the range of valid values
-        long sign = rawBits & 0x8000000000000000L;              // e.g. clear: 0x8000000000000000
-        long exponent = rawBits & 0x7ff0000000000000L;          // e.g. clear: 0x2340000000000000
-        long significand = rawBits & 0x000fffffffffffffL;       // e.g. clear: 0x00012345678abcde
+        long sign = rawBits & 0x8000000000000000L; // e.g. clear: 0x8000000000000000
+        long exponent = rawBits & 0x7ff0000000000000L; // e.g. clear: 0x2340000000000000
+        long significand = rawBits & 0x000fffffffffffffL; // e.g. clear: 0x00012345678abcde
         // encrypt significand using the provided cipher
-        significand = significand << 4;                         // e.g. clear: 0x0012345678abcde0
+        significand = significand << 4; // e.g. clear: 0x0012345678abcde0
         byte[] bytesContent = toByteArray(significand);
-        bytesContent = swapByteArray(bytesContent);             // e.g. clear: 0xe0cdab7856341200
-        bytesContent[0] = (byte) ((bytesContent[0] & 0xff) >>> 4);      // e.g. clear: 0x0ecdab7856341200
+        bytesContent = swapByteArray(bytesContent); // e.g. clear: 0xe0cdab7856341200
+        bytesContent[0] = (byte) ((bytesContent[0] & 0xff) >>> 4); // e.g. clear: 0x0ecdab7856341200
         significand = toLong(bytesContent);
-        significand = significand >>> 8;                        // e.g. clear: 0x000ecdab78563412
+        significand = significand >>> 8; // e.g. clear: 0x000ecdab78563412
         bytesContent = toByteArray(significand);
         byte[] bytesContentEnc = new byte[bytesContent.length];
-        bytesContentEnc[0] = bytesContent[0];                   // e.g. encrypted: 0x0000000000000000
-        bytesContentEnc[1] = bytesContent[1];                   // e.g. encrypted: 0x000e000000000000
+        bytesContentEnc[0] = bytesContent[0]; // e.g. encrypted: 0x0000000000000000
+        bytesContentEnc[1] = bytesContent[1]; // e.g. encrypted: 0x000e000000000000
         cipher.doFinal(bytesContent, 2, bytesContent.length - 2, bytesContentEnc, 2);
-        significand = toLong(bytesContentEnc);                  // e.g. encrypted: 0x000e(cdab78563412)
+        significand = toLong(bytesContentEnc); // e.g. encrypted: 0x000e(cdab78563412)
         // encrypt the exponent using XOR cipher
-        short expo = (short) (exponent >>> 52);                 // e.g. clear: 0x0234
+        short expo = (short) (exponent >>> 52); // e.g. clear: 0x0234
         long rawBitsMax = Double.doubleToRawLongBits(maxValue); // e.g. clear: 0xc1731940863d70a4
-        long exponentMax = rawBitsMax & 0x7ff0000000000000L;    // e.g. clear: 0xc170000000000000
-        short expoMax = (short) (exponentMax >>> 52);           // e.g. clear: 0x0c17
+        long exponentMax = rawBitsMax & 0x7ff0000000000000L; // e.g. clear: 0xc170000000000000
+        short expoMax = (short) (exponentMax >>> 52); // e.g. clear: 0x0c17
         int highestLeadingBit = 32 - Integer.numberOfLeadingZeros(expoMax) - 1; // e.g. 10
-        short lowestBitsMask = (short) ((1 << highestLeadingBit) - 1);  // e.g. 0x03ff
-        short highestBitsMask = (short) ~lowestBitsMask;        // e.g. 0xfc00
-        short xorMask = (short) (expoMax & lowestBitsMask);     // e.g. 0x0017
-        expo = (short) ((expo & highestBitsMask)                // e.g. encrypted: 0x02(23)
+        short lowestBitsMask = (short) ((1 << highestLeadingBit) - 1); // e.g. 0x03ff
+        short highestBitsMask = (short) ~lowestBitsMask; // e.g. 0xfc00
+        short xorMask = (short) (expoMax & lowestBitsMask); // e.g. 0x0017
+        expo = (short) ((expo & highestBitsMask) // e.g. encrypted: 0x02(23)
                 | ((expo & lowestBitsMask) ^ xorMask));
-        exponent = (long) expo << 52;                           // e.g. encrypted: 0x2(23)0000000000000
-        rawBits = sign | exponent | significand;                // e.g. encrypted: 0xa(23)e(cdab78563412)
+        exponent = (long) expo << 52; // e.g. encrypted: 0x2(23)0000000000000
+        rawBits = sign | exponent | significand; // e.g. encrypted: 0xa(23)e(cdab78563412)
         value = Double.longBitsToDouble(rawBits);
         return value;
     }
 
     private double decryptDouble(Cipher cipher, double value, double maxValue)
             throws ShortBufferException, IllegalBlockSizeException, BadPaddingException {
-        long rawBits = Double.doubleToRawLongBits(value);       // e.g. encrypted: 0xa(23)e(cdab78563412)
+        long rawBits = Double.doubleToRawLongBits(value); // e.g. encrypted: 0xa(23)e(cdab78563412)
         // separate decryption of the exponent and of the significand to
         // preserve validity regarding the range of valid values
-        long sign = rawBits & 0x8000000000000000L;              // e.g. encrypted: 0x8000000000000000
-        long exponent = rawBits & 0x7ff0000000000000L;          // e.g. encrypted: 0x2(23)0000000000000
-        long significand = rawBits & 0x000fffffffffffffL;       // e.g. encrypted: 0x000e(cdab78563412)
+        long sign = rawBits & 0x8000000000000000L; // e.g. encrypted: 0x8000000000000000
+        long exponent = rawBits & 0x7ff0000000000000L; // e.g. encrypted: 0x2(23)0000000000000
+        long significand = rawBits & 0x000fffffffffffffL; // e.g. encrypted: 0x000e(cdab78563412)
         // decrypt the significand using the provided cipher
         byte[] bytesContent = toByteArray(significand);
         byte[] bytesDecContent = new byte[bytesContent.length];
-        bytesDecContent[0] = bytesContent[0];                   // e.g. clear: 0x0000000000000000
-        bytesDecContent[1] = bytesContent[1];                   // e.g. clear: 0x000e000000000000
+        bytesDecContent[0] = bytesContent[0]; // e.g. clear: 0x0000000000000000
+        bytesDecContent[1] = bytesContent[1]; // e.g. clear: 0x000e000000000000
         cipher.doFinal(bytesContent, 2, bytesContent.length - 2, bytesDecContent, 2);
-        significand = toLong(bytesDecContent);                  // e.g. clear: 0x000ecdab78563412
-        significand = significand << 8;                         // e.g. clear: 0x0ecdab7856341200
+        significand = toLong(bytesDecContent); // e.g. clear: 0x000ecdab78563412
+        significand = significand << 8; // e.g. clear: 0x0ecdab7856341200
         bytesDecContent = toByteArray(significand);
-        bytesDecContent[0] = (byte) (bytesDecContent[0] << 4);  // e.g. clear: 0xe0cdab7856341200
-        bytesDecContent = swapByteArray(bytesDecContent);       // e.g. clear: 0x0012345678abcde0
+        bytesDecContent[0] = (byte) (bytesDecContent[0] << 4); // e.g. clear: 0xe0cdab7856341200
+        bytesDecContent = swapByteArray(bytesDecContent); // e.g. clear: 0x0012345678abcde0
         significand = toLong(bytesDecContent);
-        significand = significand >>> 4;                        // e.g. clear: 0x00012345678abcde
+        significand = significand >>> 4; // e.g. clear: 0x00012345678abcde
         // decrypt the exponent using XOR cipher
-        short expo = (short) (exponent >>> 52);                 // e.g. encrypted: 0x02(23)
+        short expo = (short) (exponent >>> 52); // e.g. encrypted: 0x02(23)
         long rawBitsMax = Double.doubleToRawLongBits(maxValue); // e.g. clear: 0xc1731940863d70a4
-        long exponentMax = rawBitsMax & 0x7ff0000000000000L;    // e.g. clear: 0xc170000000000000
-        short expoMax = (short) (exponentMax >>> 52);           // e.g. clear: 0x0c17
+        long exponentMax = rawBitsMax & 0x7ff0000000000000L; // e.g. clear: 0xc170000000000000
+        short expoMax = (short) (exponentMax >>> 52); // e.g. clear: 0x0c17
         int highestLeadingBit = 32 - Integer.numberOfLeadingZeros(expoMax) - 1; // e.g. 10
-        short lowestBitsMask = (short) ((1 << highestLeadingBit) - 1);  // e.g. 0x03ff
-        short highestBitsMask = (short) ~lowestBitsMask;        // e.g. 0xfc00
-        short xorMask = (short) (expoMax & lowestBitsMask);     // e.g. 0x0017
-        expo = (short) ((expo & highestBitsMask)                // e.g. encrypted: 0x0234
+        short lowestBitsMask = (short) ((1 << highestLeadingBit) - 1); // e.g. 0x03ff
+        short highestBitsMask = (short) ~lowestBitsMask; // e.g. 0xfc00
+        short xorMask = (short) (expoMax & lowestBitsMask); // e.g. 0x0017
+        expo = (short) ((expo & highestBitsMask) // e.g. encrypted: 0x0234
                 | ((expo & lowestBitsMask) ^ xorMask));
-        exponent = (long) expo << 52;                           // e.g. clear: 0x2340000000000000
-        rawBits = sign | exponent | significand;                // e.g. clear: 0xa3412345678abcde
+        exponent = (long) expo << 52; // e.g. clear: 0x2340000000000000
+        rawBits = sign | exponent | significand; // e.g. clear: 0xa3412345678abcde
         value = Double.longBitsToDouble(rawBits);
         return value;
     }
@@ -684,7 +662,7 @@ public class EncryptionModule implements DataOperation {
         // AttributeNames to the protected ones
         if (criteria != null) {
             Stream.of(criteria).forEach(criterion -> {
-                // Determine if the column is encrypted of not
+                // Determine if the column is encrypted or not
                 String protectedAttribute = attributesMapping.get(criterion.getAttributeName());
                 if (!criterion.getAttributeName().equals(protectedAttribute)) {
                     // The protected and unprotected Attribute Names do not
@@ -696,23 +674,22 @@ public class EncryptionModule implements DataOperation {
                     try {
                         // Find which "protectionRule" (in the keyset of attributeTypes) matches the given attribute name
                         String matchedProtection = null;
-                        for(String protectionRule : this.attributeTypes.keySet()){
+                        for (String protectionRule : this.attributeTypes.keySet()) {
                             Pattern p = Pattern.compile(AttributeNamesUtilities.escapeRegex(protectionRule));
-                            if(p.matcher(criterion.getAttributeName()).matches()){
+                            if (p.matcher(criterion.getAttributeName()).matches()) {
                                 matchedProtection = protectionRule;
                             }
                         }
 
                         // If none matches, ignore this attribute => it is not convered by the Policy
-                        if(matchedProtection == null)
+                        if (matchedProtection == null)
                             return;
 
                         // Obtain the dataID
                         String dataID = this.typesDataIDs.get(this.attributeTypes.get(matchedProtection));
 
                         // Get the prpteciton type of this attribute
-                        String protection = this.typesProtection
-                                .get(this.attributeTypes.get(matchedProtection));
+                        String protection = this.typesProtection.get(this.attributeTypes.get(matchedProtection));
                         // Encrypt only if the protection type is "encryption"
                         // or "simple"
                         if (protection.equals("encryption") || protection.equals("simple")) {
@@ -769,7 +746,8 @@ public class EncryptionModule implements DataOperation {
                                             box.getURT().y = Double.MAX_VALUE;
                                         }
                                         if (criterion.getOperator().equals("area")) {
-                                            value = box.getLLB().x + ", " + box.getLLB().y + ", " + box.getURT().x + ", " + box.getURT().y + ", " + srid;
+                                            value = box.getLLB().x + ", " + box.getLLB().y + ", " + box.getURT().x
+                                                    + ", " + box.getURT().y + ", " + srid;
                                         }
                                     }
                                     if (!criterion.getOperator().equals("area")) {
@@ -823,17 +801,10 @@ public class EncryptionModule implements DataOperation {
         // Then build the Attributes Mapping AND filter the ones not concerned
         Map<String, String> attribsMapping = filterMapingEntries(
                 this.buildAttributesMapping(filteredAttributes.toArray(new String[filteredAttributes.size()]),
-                        attrib -> EncryptionModule.TO_BE_FILTERED_FLAG, // Not
-                                                                        // covered
-                                                                        // Attributes
-                                                                        // will
-                                                                        // be
-                                                                        // marked
-                                                                        // for
-                                                                        // later
-                                                                        // filtering
-                        attrib -> attrib)); // Not protected Attributes will NOT
-                                            // be marked for later filtering
+                        // Not covered Attributes will be marked for later filtering
+                        attrib -> EncryptionModule.TO_BE_FILTERED_FLAG,
+                        // Not protected Attributes will NOT be marked for later filtering
+                        attrib -> attrib));
         List<Map<String, String>> aux = new ArrayList<>();
         for (int i = 0; i < this.cloudsNumber; i++) {
             // Insert the Mapping in the first place
@@ -845,7 +816,7 @@ public class EncryptionModule implements DataOperation {
     private Map<String, String> filterMapingEntries(Map<String, String> mapping) {
         // This function will analyze the given mapping (built using
         // buildAttributesMapping)
-        // and remove the entries that are not comprised in the seciryt policy.
+        // and remove the entries that are not comprised in the security policy.
         // Get the Entries set
         Set<Map.Entry<String, String>> entries = mapping.entrySet();
         Set<Map.Entry<String, String>> newEntries = new HashSet<>();
@@ -862,27 +833,21 @@ public class EncryptionModule implements DataOperation {
         return newEntries.stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
-    private Map<String,String> buildAttributesMapping(String[] attributes, Function<String, String> notCoveredTransform, Function<String,String> notProtected){
+    private Map<String, String> buildAttributesMapping(String[] attributes,
+            Function<String, String> notCoveredTransform, Function<String, String> notProtected) {
         // NOTE: The "notCoveredTransform" function will say what to do with the attributes non-covered by the security policy.
         // NOTE: The "notProtected" function will say what to do with the attributes covered by the security policy but not using this module
         // Create the mapping between the given attribute names and their protected names
         // This mapping must be done considering the list of attributes to protect specified in the security policy
         // Generate the map between qualified Attributes and protected Attributes Names
-        Map<String,String> mapping;
+        Map<String, String> mapping;
 
         mapping = Arrays.asList(attributes).stream() // Get all the qualified Names
                 .collect(Collectors.toMap( // Reduce them into a new Map
-                        originalQualifAttribName -> originalQualifAttribName, // Use
-                                                                              // the
-                                                                              // same
-                                                                              // qualified
-                                                                              // Attribute
-                                                                              // Name
-                                                                              // as
-                                                                              // key
-                        originalQualifAttribName -> { // Generate the mapped
-                                                      // values: the "encrypted"
-                                                      // ones
+                        // Use the same qualified Attribute Name as key
+                        originalQualifAttribName -> originalQualifAttribName,
+                        // Generate the mapped values: the "encrypted" ones
+                        originalQualifAttribName -> {
                             String attribEnc = "";
                             try {
                                 // Find which "protectionRule" (in the keyset of
@@ -914,31 +879,33 @@ public class EncryptionModule implements DataOperation {
                                 // Encrypt only if the protection type is
                                 // "encryption" or "simple"
                                 if (protection.equals("encryption") || protection.equals("simple")) {
-                                    /*
-                                     * // The name of the attribute CAN be
-                                     * completely encrypted. Use this code to do
-                                     * so byte[] bytesAttribEnc;
-                                     *
-                                     * // Initialize the Secret Key and the Init
-                                     * Vector of the Cipher IvParameterSpec iv =
-                                     * new IvParameterSpec(this.keyStore.
-                                     * retrieveInitVector(dataID)); SecretKey sk
-                                     * = this.keyStore.retrieveKey(dataID);
-                                     *
-                                     * Cipher cipher =
-                                     * Cipher.getInstance("AES/CBC/PKCS5Padding"
-                                     * ); cipher.init(Cipher.ENCRYPT_MODE, sk,
-                                     * iv);
-                                     *
-                                     * // NOTE - To correctly encrypt, First
-                                     * cipher, THEN Base64 encode bytesAttribEnc
-                                     * =
-                                     * cipher.doFinal(originalQualifAttribName.
-                                     * getBytes()); attribEnc =
-                                     * Base64.getEncoder().encodeToString(
-                                     * bytesAttribEnc);
-                                     */
-                                    attribEnc = originalQualifAttribName + "_enc";
+                                    // The name of the attribute CAN be
+                                    //completely encrypted. Use this code to do
+                                    //so
+                                    byte[] bytesAttribEnc;
+
+                                    // Initialize the Secret Key and the Init
+                                    // Vector of the Cipher
+                                    IvParameterSpec iv = new IvParameterSpec(this.keyStore.retrieveInitVector(dataID));
+                                    SecretKey sk = this.keyStore.retrieveKey(dataID);
+
+                                    Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+                                    cipher.init(Cipher.ENCRYPT_MODE, sk, iv);
+                                    // ISSUE - We need to encrypt only the last portion of the
+                                    // qualified attribute name
+                                    String[] attribParts = originalQualifAttribName.split("/");
+
+                                    // NOTE - To correctly encrypt, First cipher, THEN Base64 encode
+                                    bytesAttribEnc = cipher.doFinal(attribParts[2].getBytes());
+
+                                    // Rejoin the qualified attibute name and add the 
+                                    // "_enc" suffix to easily identify the protected attributes
+                                    attribEnc = attribParts[0] + "/" + attribParts[1] + "/"
+                                            + Base64.getEncoder().encodeToString(bytesAttribEnc) + "_enc";
+
+                                    // Simple "encrypted" attribute names:
+                                    // Attach the "_enc" prefix.
+                                    //attribEnc = originalQualifAttribName + "_enc";
                                 } else {
                                     // Otherwise, just let the attribute name
                                     // pass in plain text
@@ -954,5 +921,4 @@ public class EncryptionModule implements DataOperation {
                         }));
         return mapping;
     }
-
 }
