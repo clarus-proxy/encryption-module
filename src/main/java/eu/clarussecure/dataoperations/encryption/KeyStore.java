@@ -6,6 +6,7 @@ import com.mongodb.client.MongoCursor;
 import com.mongodb.client.MongoDatabase;
 import static com.mongodb.client.model.Filters.eq;
 import com.mongodb.client.model.UpdateOptions;
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -33,6 +34,15 @@ public class KeyStore {
     private String clarusDBName = "CLARUS"; // Default DB name
 
     private KeyStore() {
+        // Identify the platform to correctly locate the configuration File
+        if(System.getProperty("os.name").toLowerCase().contains("windows")){
+            // This is a Windows Platform. Use a Windows-friendly path
+            confFile = "C:" + File.pathSeparator + "CLARUS" + File.pathSeparator + "clarus-keystore.conf";
+        } else {
+            // Since CLARUS does not support machines except for Windows, Linux
+            // and Mac, in this case we will assume this is a Linux Machine.
+            confFile = "/etc/clarus/clarus-keystore.conf";
+        }
         // Initiate the basic connections to the database
         // Correctly configure the log level
         Logger mongoLogger = Logger.getLogger("org.mongodb.driver");
