@@ -35,7 +35,7 @@ public class KeyStore {
 
     private KeyStore() {
         // Identify the platform to correctly locate the configuration File
-        if(System.getProperty("os.name").toLowerCase().contains("windows")){
+        if (System.getProperty("os.name").toLowerCase().contains("windows")) {
             // This is a Windows Platform. Use a Windows-friendly path
             confFile = "C:" + File.separator + "CLARUS" + File.separator + "clarus-keystore.conf";
         } else {

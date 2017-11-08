@@ -299,15 +299,15 @@ public class EncryptionModule implements DataOperation {
             // Second, decipher the attribute names
             try {
                 // First, decipher the attribute Names and map them to the
-                // origial ones
+                // original ones
+                // Get the mapping of the protected attributes
+                Map<String, String> protAttribNames = com.getMapping();
+                // "Invert" The Mapping
+                Map<String, String> invertedMap = protAttribNames.entrySet().stream()
+                        .collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
                 for (int i = 0; i < com.getProtectedAttributeNames().length; i++) {
                     // The "_enc" suffix was added to identify encrypted attributes
                     if (com.getProtectedAttributeNames()[i].endsWith("_enc")) {
-                        // Get the mapping of the protected attributes
-                        Map<String, String> protAttribNames = com.getMapping();
-                        // "Invert" The Mapping
-                        Map<String, String> invertedMap = protAttribNames.entrySet().stream()
-                                .collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
                         // As we have the "inverted" mapping, deciphering is as
                         // simple as map the encrypted values
                         plainAttributeNames[i] = invertedMap.get(com.getProtectedAttributeNames()[i]);
@@ -900,8 +900,14 @@ public class EncryptionModule implements DataOperation {
 
                                     // Rejoin the qualified attibute name and add the 
                                     // "_enc" suffix to easily identify the protected attributes
-                                    attribEnc = attribParts[0] + "/" + attribParts[1] + "/"
-                                            + Base64.getEncoder().encodeToString(bytesAttribEnc) + "_enc";
+                                    // FIX ISSUE # 4
+                                    // The Base64 encoding uses the "/" character, so it MIGHT pose a
+                                    // problem when encrypting the attribute name.
+                                    // To fix this, we will simply replace all the "/" with another
+                                    // char ("*" in this case).
+                                    String encAttribName = Base64.getEncoder().encodeToString(bytesAttribEnc);
+                                    encAttribName = encAttribName.replace("/", "*");
+                                    attribEnc = attribParts[0] + "/" + attribParts[1] + "/" + encAttribName + "_enc";
 
                                     // Simple "encrypted" attribute names:
                                     // Attach the "_enc" prefix.
