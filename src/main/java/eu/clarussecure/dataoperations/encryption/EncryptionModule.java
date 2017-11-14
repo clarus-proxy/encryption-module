@@ -2,7 +2,6 @@ package eu.clarussecure.dataoperations.encryption;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -26,6 +25,8 @@ import org.w3c.dom.Document;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
+
+import org.apache.commons.codec.binary.Hex;
 
 import eu.clarussecure.dataoperations.AttributeNamesUtilities;
 import eu.clarussecure.dataoperations.Criteria;
@@ -252,10 +253,10 @@ public class EncryptionModule implements DataOperation {
                                 cipher.init(Cipher.ENCRYPT_MODE, sk, iv);
 
                                 // NOTE - To correctly encrypt, First cipher, THEN
-                                // Base64 encode
+                                // use the String encoder
                                 String value = criterion.getValue() != null ? criterion.getValue() : "clarus_null";
                                 bytesAttribEnc = cipher.doFinal(value.getBytes());
-                                protectedThreshold = Base64.getEncoder().encodeToString(bytesAttribEnc);
+                                protectedThreshold = Hex.encodeHexString(bytesAttribEnc, true);
                             }
                         } else {
                             // Otherwise, just let the value pass in plain text
@@ -293,8 +294,6 @@ public class EncryptionModule implements DataOperation {
             String[] plainAttributeNames = new String[com.getProtectedAttributeNames().length];
             List<String[]> plainContents = new ArrayList<>();
             Map<String, String> mapAttributes = new HashMap<>();
-
-            Base64.Decoder decoder = Base64.getDecoder();
 
             // Second, decipher the attribute names
             try {
@@ -413,9 +412,9 @@ public class EncryptionModule implements DataOperation {
                                 cipher.init(Cipher.DECRYPT_MODE, key, iv);
 
                                 // Decipher the value
-                                // NOTE - To correctly decrypt, first Base64
-                                // decode, THEN decipher
-                                byte[] bytesDecContent = cipher.doFinal(decoder.decode(content[i][j].getBytes()));
+                                // NOTE - To correctly decrypt, first use the
+                                // String decoder, THEN decipher
+                                byte[] bytesDecContent = cipher.doFinal(Hex.decodeHex(content[i][j]));
                                 plainValue = new String(bytesDecContent);
                                 if ("clarus_null".equals(plainValue)) {
                                     plainValue = null;
@@ -447,8 +446,6 @@ public class EncryptionModule implements DataOperation {
     @Override
     public List<DataOperationCommand> post(String[] attributeNames, String[][] contents) {
         String[][] encContents = new String[contents.length][attributeNames.length];
-
-        Base64.Encoder encoder = Base64.getEncoder();
 
         // Create the mapping between the given Attribute Names and the protected ones.
         // This method uses the "buildAttributesMapping" function, letting the not covered and unprotected attributes pass
@@ -517,10 +514,11 @@ public class EncryptionModule implements DataOperation {
                             Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
                             cipher.init(Cipher.ENCRYPT_MODE, key, iv);
 
-                            // NOTE - To correctly encrypt, First cipher, THEN Base64 encode
+                            // NOTE - To correctly encrypt, First cipher, THEN
+                            // use the String encoder
                             String content = contents[i][j] != null ? contents[i][j] : "clarus_null";
                             bytesContentEnc = cipher.doFinal(content.getBytes());
-                            encContents[i][j] = encoder.encodeToString(bytesContentEnc);
+                            encContents[i][j] = Hex.encodeHexString(bytesContentEnc, true);
                         }
                     } else {
                         // Simply copy the content
@@ -760,10 +758,10 @@ public class EncryptionModule implements DataOperation {
                                 cipher.init(Cipher.ENCRYPT_MODE, sk, iv);
 
                                 // NOTE - To correctly encrypt, First cipher, THEN
-                                // Base64 encode
+                                // use the String encoder
                                 String value = criterion.getValue() != null ? criterion.getValue() : "clarus_null";
                                 bytesAttribEnc = cipher.doFinal(value.getBytes());
-                                protectedThreshold = Base64.getEncoder().encodeToString(bytesAttribEnc);
+                                protectedThreshold = Hex.encodeHexString(bytesAttribEnc, true);
                             }
                         } else {
                             // Otherwise, just let the value pass in plain text
@@ -905,8 +903,11 @@ public class EncryptionModule implements DataOperation {
                                     // problem when encrypting the attribute name.
                                     // To fix this, we will simply replace all the "/" with another
                                     // char ("*" in this case).
-                                    String encAttribName = Base64.getEncoder().encodeToString(bytesAttribEnc);
-                                    encAttribName = encAttribName.replace("/", "*");
+                                    // FIX - Geometric encryption
+                                    // Changed the codec from Base64 to Hex. There should not be
+                                    // any problem with this codec.
+                                    String encAttribName = Hex.encodeHexString(bytesAttribEnc, true);
+                                    encAttribName = encAttribName.replace("/", "_");
                                     attribEnc = attribParts[0] + "/" + attribParts[1] + "/" + encAttribName + "_enc";
 
                                     // Simple "encrypted" attribute names:
