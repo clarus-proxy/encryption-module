@@ -880,6 +880,7 @@ public class EncryptionModule implements DataOperation {
                                     // The name of the attribute CAN be
                                     //completely encrypted. Use this code to do
                                     //so
+                                    /*
                                     byte[] bytesAttribEnc;
 
                                     // Initialize the Secret Key and the Init
@@ -913,6 +914,10 @@ public class EncryptionModule implements DataOperation {
                                     // Simple "encrypted" attribute names:
                                     // Attach the "_enc" prefix.
                                     //attribEnc = originalQualifAttribName + "_enc";
+                                    */
+                                    // FIX - Column names WILL NOT be encripted
+                                    // This features encoutered problems with docker
+                                    attribEnc = originalQualifAttribName + "_enc";
                                 } else {
                                     // Otherwise, just let the attribute name
                                     // pass in plain text
