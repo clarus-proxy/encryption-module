@@ -489,7 +489,14 @@ public class EncryptionModule implements DataOperation {
 
                             String value = contents[i][j];
                             GeometryBuilder builder = new GeometryBuilder();
-                            Object geom = builder.decode(value);
+                            Object geom = null;
+                            try {
+                                geom = builder.decode(value);
+                            }
+                            // in case the value is not in WKT format (e.g. GML for WFS)
+                            catch (java.lang.StringIndexOutOfBoundsException e) {
+                                geom = new Point(String.format("POINT(%s)",value));
+                            }
                             if (geom != null) {
                                 // NOTE - To correctly encrypt, just cipher coordinates
                                 if (geom instanceof Point) {
